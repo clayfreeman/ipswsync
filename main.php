@@ -1,13 +1,21 @@
 <?php
-  /////////////////////////////// BEGIN CONFIG ///////////////////////////////
+  /////////////////////////// BEGIN ADVANCED CONFIG //////////////////////////
 
   // The URL at which to find IPSW information
   $url    = 'http://ax.phobos.apple.com.edgesuite.net/WebObjects/MZStore.woa'.
             '/wa/com.apple.jingle.appserver.client.MZITunesClientCheck/version';
-  // The base path at which IPSW files will be synchronized
-  $path   = '/mnt/www/apple/stable/ios';
 
   //////////////////////////////// END CONFIG ////////////////////////////////
+
+  // Load the configuration file
+  require_once(__DIR__.'/config.php');
+
+  // Verify that the given path is a writable directory
+  if (!isset($path) || !is_dir($path) || !is_writable($path)) {
+    echo 'Please configure the \'$path\' variable in \'config.php\' to a '.
+         "writable directory.\n";
+    exit(1);
+  }
 
   // Require composer's vendor autoload
   require_once(__DIR__.'/vendor/autoload.php');
