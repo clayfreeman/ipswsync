@@ -1,0 +1,14 @@
+{
+    "name": "clayfreeman/ipswsync",
+    "description": "Synchronizes the publicly available IPSW files that are distributed through iTunes to a given directory.",
+    "license": "GNU General Public License v3.0",
+    "authors": [
+        {
+            "name": "Clay Freeman",
+            "email": "composer@clayfreeman.com"
+        }
+    ],
+    "require": {
+        "symfony/filesystem": "^2.7"
+    }
+}
