@@ -195,7 +195,8 @@
 
   // Run curl commands in parallel
   if (count($cmds) > 0) {
-    echo "Downloading IPSW files in parallel (this may take a while) ...\n";
+    echo 'Downloading '.count($cmds).' IPSW files in parallel (this may take '.
+      "a while) ...\n";
     passthru('echo '.implode($cmds).' | parallel --no-notice '.
       '-j '.escapeshellarg($parallel));
   }
