@@ -17,6 +17,20 @@
     exit(1);
   }
 
+  // Verify that the last_versions variable has been set to an acceptable value
+  if (!isset($last_versions) || $last_versions < 1) {
+    echo 'Please configure the \'$last_versions\' variable in \'config.php\' '.
+         "to a positive value.\n";
+    exit(1);
+  }
+
+  // Verify that the parallel variable has been set to an acceptable value
+  if (!isset($parallel) || $parallel < 1 || $parallel > 6) {
+    echo 'Please configure the \'$parallel\' variable in \'config.php\' '.
+         "to a value from 1 to 6.\n";
+    exit(1);
+  }
+
   // Require composer's vendor autoload
   require_once(__DIR__.'/vendor/autoload.php');
   // Instantiate a new Filesystem object
@@ -33,51 +47,63 @@
   // The regular expression to match IPSW URLs in a Property List
   $sregex = '<string>'.$regex;
   // Prepare the regular expression strings for use with preg_match(...)
-  $sregex = '/'.$sregex.'/i';
   $regex  = '/'.$regex .'/i';
+  $sregex = '/'.$sregex.'/i';
 
   // Split the above information resource by newline character
-  $urls   = explode("\n", str_ireplace("\r", null, trim(
-            file_get_contents($url))));
+  $urls   = file_get_contents($url);
   // An array to hold IPSW information
   $ipsw   = array();
   // An array to hold all encountered version numbers
   $vers   = array();
+  // Create an array of matches from the information resource
+  preg_match_all($sregex, $urls, $matches, PREG_SET_ORDER);
   // Iterate over each line of the information resource
-  foreach ($urls as $url) {
-    // Check that this line matches the above regular expression for Property
-    // List file format
-    if (preg_match($sregex, trim($url), $m)) {
-      // Add the version for this URL to the version array
-      if (!in_array($m['version'], $vers))
-        $vers[] = $m['version'];
-      // Lowercase the category in order to keep the directory hierarchy all
-      // lowercase (except IPSW files)
-      $m['category'] = strtolower($m['category']);
-      // Create an entry for this category if it doesn't exist
-      if (!isset($ipsw[$m['category']]))
-        $ipsw[$m['category']] = array();
-      // Add the URL for this IPSW to the IPSW array for further processing
+  foreach ($matches as $m) {
+    // Lowercase the category in order to keep the directory hierarchy all
+    // lowercase (except IPSW files)
+    $m['category'] = strtolower($m['category']);
+    // Add the version for this URL to the version array
+    if (!isset($vers[$m['category']]))
+      $vers[$m['category']] = array();
+    // Add the version for this URL to the version array
+    if (!in_array($m['version'], $vers[$m['category']]))
+      $vers[$m['category']][] = $m['version'];
+    // Create an entry for this category if it doesn't exist
+    if (!isset($ipsw[$m['category']]))
+      $ipsw[$m['category']] = array();
+    // Create an entry for this version if it doesn't exist
+    if (!isset($ipsw[$m['category']][$m['version']]))
+      $ipsw[$m['category']][$m['version']] = array();
+    // Add the URL for this IPSW to the IPSW array for further processing
+    if (!in_array($m['url'], $ipsw[$m['category']][$m['version']]))
       $ipsw[$m['category']][$m['version']][] = $m['url'];
-      // Sort the arrays using natural sort order
-      ksort($ipsw[$m['category']], SORT_NATURAL);
-      ksort($ipsw, SORT_NATURAL);
-      sort($vers, SORT_NATURAL);
-    }
   }
 
-  // Pop the last item (newest version) off the end of the array
-  $vers = array_pop($vers);
-  foreach ($ipsw as $category => $versions) {
-    foreach ($versions as $version => $urls) {
-      // Remove each version that doesn't correspond with the version in $vers
-      // or has no URL entries
-      if ($version != $vers || count($urls) < 1)
+  // Sort the resulting IPSW and version arrays
+  ksort($vers, SORT_NATURAL);
+  ksort($ipsw, SORT_NATURAL);
+  foreach ($vers as $category => $versions)
+    sort($vers[$category], SORT_NATURAL);
+  foreach ($ipsw as $category => $versions)
+    ksort($ipsw[$category], SORT_NATURAL);
+
+  // Iterate over each category to select acceptable versions
+  foreach ($vers as $category => $versions) {
+    // Pick a non-negative start value to select versions
+    $start = (count($versions) - $last_versions);
+    $start = ($start >= 0 ? $start : 0);
+    // Create an array to store acceptable versions
+    $v = array();
+    // Select acceptable versions and place them in the array
+    for ($i = $start; $i < count($versions); $i++) {
+      $v[] = $versions[$i];
+    }
+    // Remove unacceptable versions from the IPSW array
+    foreach ($ipsw[$category] as $version => $urls) {
+      if (!in_array($version, $v))
         unset($ipsw[$category][$version]);
     }
-    // Remove categories that have no version information
-    if (count($versions) < 1)
-      unset($ipsw[$category]);
   }
 
   // Get a list of categories currently on-disk
@@ -123,6 +149,7 @@
     }
   }
 
+  $cmds = array();
   foreach ($ipsw as $category => $versions) {
     // If a category from the IPSW information resource doesn't exist on-disk,
     // create it
@@ -156,12 +183,21 @@
         if (!in_array($link, $files)) {
           $durl = $ipsw[$category][$version][$key];
           $dest = $path.'/'.$category.'/'.$version.'/'.$link;
-          echo "Downloading IPSW ".escapeshellarg($durl)." to ".
-               escapeshellarg($dest)." ...\n";
-          passthru('curl '.escapeshellarg($durl).' > '.escapeshellarg($dest));
+          $cmds[] = escapeshellarg('curl -s '.escapeshellarg($durl).' -o '.
+            escapeshellarg($dest).'; echo '.escapeshellarg(
+            'Done downloading '.escapeshellarg(basename($durl)))."\n");
+          echo 'Added IPSW '.escapeshellarg(basename($durl)).' to download '.
+            "queue.\n";
         }
       }
     }
+  }
+
+  // Run curl commands in parallel
+  if (count($cmds) > 0) {
+    echo "Downloading IPSW files in parallel (this may take a while) ...\n";
+    passthru('echo '.implode($cmds).' | parallel --no-notice '.
+      '-j '.escapeshellarg($parallel));
   }
 
   // Remove the synchronization directory lock
