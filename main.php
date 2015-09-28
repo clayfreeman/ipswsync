@@ -42,13 +42,8 @@
   touch($path.'/sync.lock') or exit(1);
 
   // The regular expression to match IPSW URLs
-  $regex  = '(?P<url>.*\\/(?P<device>(?P<category>[a-z]+)\\d+,\\d+)_'.
-            '(?P<version>[\\d.]+)_[a-z0-9]+_Restore.ipsw)';
-  // The regular expression to match IPSW URLs in a Property List
-  $sregex = '<string>'.$regex;
-  // Prepare the regular expression strings for use with preg_match(...)
-  $regex  = '/'.$regex .'/i';
-  $sregex = '/'.$sregex.'/i';
+  $regex  = '/(?P<url>http.*\\/(?P<device>(?P<category>[a-z]+)\\d+,\\d+)_'.
+            '(?P<version>[\\d.]+)_[a-z0-9]+_Restore.ipsw)/i';
 
   // Split the above information resource by newline character
   $urls   = file_get_contents($url);
@@ -57,7 +52,7 @@
   // An array to hold all encountered version numbers
   $vers   = array();
   // Create an array of matches from the information resource
-  preg_match_all($sregex, $urls, $matches, PREG_SET_ORDER);
+  preg_match_all($regex, $urls, $matches, PREG_SET_ORDER);
   // Iterate over each line of the information resource
   foreach ($matches as $m) {
     // Lowercase the category in order to keep the directory hierarchy all
